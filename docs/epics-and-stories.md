@@ -1,0 +1,135 @@
+- Epic: Task Core Fields (MVP)
+  - Story: Require title field for tasks
+    - Acceptance Criteria:
+      - Title is required when creating or editing a task.
+      - Saving with an empty or whitespace-only title is blocked with an inline error.
+      - Title appears in task list and any detail view.
+    - Technical Requirements:
+      - Frontend: Enforce required title in `packages/frontend/src/TaskForm.js` before calling save.
+      - Frontend: Display inline error message when `title.trim()` is empty.
+      - Data Model: Include `title` on task objects; keep `description` optional.
+      - Backend: No changes required for MVP (local storage); existing API validation in `packages/backend/src/app.js` remains unused.
+
+- Epic: Due Date (MVP)
+  - Story: Add optional due date field (YYYY-MM-DD)
+    - Acceptance Criteria:
+      - Due date input accepts ISO format YYYY-MM-DD.
+      - Due date is optional; tasks save successfully without a due date.
+      - Invalid date entries are not persisted and are treated as absent.
+    - Technical Requirements:
+      - Frontend: Use `<TextField type="date">` bound to `dueDate` in `TaskForm.js`.
+      - Frontend: Store normalized `due_date` as `YYYY-MM-DD` (already implemented via `normalizeDateString()` in `TaskForm.js`).
+      - Frontend: Omit `due_date` when empty or invalid before persistence.
+      - Backend: No schema change needed for MVP; backend column `due_date` exists but is not used in MVP if local storage is adopted.
+  - Story: Ignore invalid due dates in model
+    - Acceptance Criteria:
+      - Unparsable or invalid due date values are discarded before persistence.
+      - Tasks without a valid due date behave as undated for filters.
+    - Technical Requirements:
+      - Frontend: Add guard to ignore non-`YYYY-MM-DD` values; treat as `null` in the local model.
+      - Frontend: Ensure filter logic treats `null`/empty `due_date` as undated.
+
+- Epic: Priority (MVP)
+  - Story: Add priority enum P1/P2/P3 with default P3
+    - Acceptance Criteria:
+      - New tasks default to priority P3 if none is selected.
+      - Priority selection is limited to P1, P2, or P3.
+      - Priority persists to storage and loads correctly.
+    - Technical Requirements:
+      - Frontend: Add priority selector to `TaskForm.js` (MUI `Select`) with values `P1|P2|P3` and default `P3`.
+      - Frontend: Include `priority` in the task object stored locally.
+      - Data Model: Extend local task shape to `{ id, title, description, due_date, completed, priority }`.
+      - Backend: No backend changes in MVP; do not rely on API for priority unless Post-MVP enables API usage.
+  - Story: Display priority on task items
+    - Acceptance Criteria:
+      - Task list displays the priority value (P1/P2/P3) for each task.
+      - Priority value is visible in create/edit forms.
+    - Technical Requirements:
+      - Frontend: Render a badge or label for `priority` in `packages/frontend/src/TaskList.js` alongside title.
+      - Frontend: Pre-populate priority in edit mode in `TaskForm.js`.
+
+- Epic: Filtering (MVP)
+  - Story: Add All filter tab
+    - Acceptance Criteria:
+      - All tab shows all tasks regardless of completion state or due date.
+      - Completed tasks are visible in the All tab.
+    - Technical Requirements:
+      - Frontend: Add MUI Tabs in `App.js` or `TaskList.js` to switch views.
+      - Frontend: Compute filtered array in client state from local tasks.
+  - Story: Add Today filter tab
+    - Acceptance Criteria:
+      - Today tab shows only incomplete tasks with dueDate equal to today (local date).
+      - Tasks without a dueDate are excluded from Today.
+    - Technical Requirements:
+      - Frontend: Implement date comparison using local date (no timezone offset) against `YYYY-MM-DD`.
+      - Frontend: Exclude tasks where `completed === true` or `due_date` is empty.
+  - Story: Add Overdue filter tab
+    - Acceptance Criteria:
+      - Overdue tab shows only incomplete tasks with dueDate before today (local date).
+      - Tasks without a dueDate are excluded from Overdue.
+    - Technical Requirements:
+      - Frontend: Implement `due_date < today` comparison for `YYYY-MM-DD` strings.
+      - Frontend: Exclude tasks where `completed === true` or `due_date` is empty.
+  - Story: Hide completed tasks in Today and Overdue
+    - Acceptance Criteria:
+      - Completed tasks do not appear in Today or Overdue tabs.
+    - Technical Requirements:
+      - Frontend: Ensure filter predicates exclude `completed` tasks in non-All tabs.
+  - Story: Show completed tasks in All
+    - Acceptance Criteria:
+      - Completed tasks are included in the All tab results.
+    - Technical Requirements:
+      - Frontend: All tab returns unfiltered list.
+
+- Epic: Local Storage (MVP)
+  - Story: Persist tasks in local storage
+    - Acceptance Criteria:
+      - Creating, editing, completing, and deleting tasks update localStorage immediately.
+      - Data persists across page reloads.
+    - Technical Requirements:
+      - Frontend: Introduce a storage adapter (e.g., `useLocalTasks()` or `storage.js`) to read/write `window.localStorage` under a stable key (e.g., `todo.tasks`).
+      - Frontend: Replace `fetch('/api/tasks'...)` calls in `App.js` and `TaskList.js` with adapter methods for MVP.
+      - Frontend: Generate client-side `id` (e.g., timestamp + counter or UUID) for new tasks.
+      - Backend: Keep Express API (`packages/backend/src/app.js`) untouched; not used in MVP.
+  - Story: Load tasks from local storage on app start
+    - Acceptance Criteria:
+      - App loads tasks from localStorage on startup.
+      - If localStorage has no data, app initializes with an empty task list.
+    - Technical Requirements:
+      - Frontend: Initialize state from localStorage in `TaskList.js` and/or at top-level in `App.js`.
+      - Frontend: Provide migration-safe parse with try/catch and default to `[]`.
+
+- Epic: Overdue Visuals (Post-MVP)
+  - Story: Highlight overdue tasks visually
+    - Acceptance Criteria:
+      - Overdue tasks are visually distinguished (e.g., red accent or badge) with sufficient contrast.
+      - Visual highlighting is consistent across all list views.
+      - Non-overdue tasks retain normal styling.
+    - Technical Requirements:
+      - Frontend: In `TaskList.js`, apply conditional styling (e.g., red `Chip` or border) when `due_date < today` and `completed === false`.
+      - Frontend: Ensure WCAG AA contrast with red accent (#f44336) per `docs/ui-guidelines.md`.
+
+- Epic: Sorting (Post-MVP)
+  - Story: Sort tasks overdue first
+    - Acceptance Criteria:
+      - In list views, overdue tasks appear before non-overdue tasks.
+    - Technical Requirements:
+      - Frontend: Implement client-side sort comparator prioritizing overdue tasks.
+      - Backend: Optional future enhancement—update SQL ORDER BY in `packages/backend/src/app.js` to group overdue first if API is used.
+  - Story: Sort tasks by priority P1→P3
+    - Acceptance Criteria:
+      - Within the same overdue/non-overdue group, tasks are ordered P1, then P2, then P3.
+    - Technical Requirements:
+      - Frontend: Include `priority` weight mapping `{ P1: 1, P2: 2, P3: 3 }` in comparator.
+      - Backend: If enabling API later, add `priority TEXT CHECK(priority IN ('P1','P2','P3'))` column and include in ORDER BY.
+  - Story: Sort tasks by due date ascending
+    - Acceptance Criteria:
+      - Within the same priority level, tasks with earlier due dates appear before later ones.
+    - Technical Requirements:
+      - Frontend: Compare `YYYY-MM-DD` strings by converting to integers `YYYYMMDD` or using `new Date(year, month-1, day)` without TZ offsets.
+  - Story: Place undated tasks last
+    - Acceptance Criteria:
+      - Tasks without a dueDate appear after all tasks with a due date.
+    - Technical Requirements:
+      - Frontend: Ensure comparator places `due_date == null/''` after dated tasks.
+      - Backend: Current SQL `ORDER BY due_date IS NULL, due_date ASC, created_at ASC` keeps undated last; maintain if API sorting is used post-MVP.
